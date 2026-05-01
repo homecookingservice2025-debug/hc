@@ -84,6 +84,7 @@ let config = {
 };
 
 // API Routes
+app.get("/api/health", (req, res) => res.json({ status: "ok", env: process.env.NODE_ENV }));
 app.get("/api/config", (req, res) => res.json(config));
 app.post("/api/config", (req, res) => {
   config = { ...config, ...req.body };

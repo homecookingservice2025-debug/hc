@@ -18,26 +18,54 @@ const firebaseConfig = {
   firestoreDatabaseId: env.VITE_FIREBASE_DATABASE_ID || "ai-studio-c8ecaf03-8d30-445c-81b9-b7639c206a04"
 };
 
-let app;
+let app: any;
 try {
   app = initializeApp(firebaseConfig);
 } catch (error) {
   console.error("Firebase Initialization Error:", error);
-  // Create a dummy app or handle gracefully
-  app = { name: '[DEFAULT]', options: {}, automaticDataCollectionEnabled: false };
 }
-export const db = getFirestore(app as any, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app as any);
+
+// Safely initialize Firestore with fallback
+export const db = (() => {
+    try {
+        if (!app) throw new Error("No Firebase App");
+        return getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+    } catch (e) {
+        console.error("Firestore Initialization failed with project-specific ID, falling back to (default):", e);
+        try {
+            return getFirestore(app);
+        } catch (e2) {
+            console.error("Firestore Fatal Error:", e2);
+            return {} as any; // Final fallback to avoid crash
+        }
+    }
+})();
+
+export const auth = (() => {
+    try {
+        if (!app) throw new Error("No Firebase App");
+        return getAuth(app);
+    } catch (e) {
+        console.error("Auth Initialization Error:", e);
+        return {} as any;
+    }
+})();
+
 export const googleProvider = new GoogleAuthProvider();
 
-// Critical: Test connection
+// Critical: Test connection (Non-blocking)
 async function testConnection() {
+  if (!app || !db.type) return; // Skip if initialization failed
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    // Using a path that is allowed by security rules for public read
+    await getDocFromServer(doc(db, 'config', 'main'));
     console.log("Firebase Connected Successfully");
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration or internet connection.");
+  } catch (error: any) {
+    // Permission denied is actually a good sign (it means we reached the server)
+    if (error.code === 'permission-denied') {
+        console.log("Firebase connected (auth boundary reached).");
+    } else {
+        console.warn("Firebase connection test warning:", error.message);
     }
   }
 }

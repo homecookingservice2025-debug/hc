@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user of the system (Customer, Chef, Admin, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "MANAGER", "USER", "CHEF"] },
+        "name": { "type": "string" },
+        "surname": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "customerCode": { "type": "string" },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+               "id": { "type": "string" },
+               "label": { "type": "string" },
+               "address": { "type": "string" },
+               "location": { "type": "string" },
+               "googleLocation": { "type": "string" }
+            }
+          }
+        },
+        "isVerified": { "type": "boolean" },
+        "isOnline": { "type": "boolean" },
+        "googleLocation": { "type": "string" }
+      },
+      "required": ["id", "role", "email"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Represents a chef booking session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "chefId": { "type": "string" },
+        "chefName": { "type": "string" },
+        "chefPhone": { "type": "string" },
+        "type": { "type": "string", "enum": ["DAILY", "PARTY", "CUSTOM"] },
+        "status": { "type": "string", "enum": ["PENDING", "COOKING", "PAID", "COMPLETED", "CANCELLED"] },
+        "otp": { "type": "string" },
+        "address": { "type": "string" },
+        "googleLocation": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "status", "otp", "createdAt"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "address": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "upiId": { "type": "string" },
+        "partyMenuImageUrl": { "type": "string" },
+        "dailyVegImageUrl": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Chef booking records"
+    },
+    "/config/main": {
+      "schema": "AppConfig",
+      "description": "Global app configuration"
+    }
+  }
+}

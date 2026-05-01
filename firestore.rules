@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.id == userId
+          && data.role is string && data.role.size() <= 20
+          && data.email is string && data.email.size() <= 100
+          && (!('name' in data) || (data.name is string && data.name.size() <= 50))
+          && (!('addresses' in data) || (data.addresses is list && data.addresses.size() <= 10));
+      }
+
+      allow get: if isOwner(userId) || isAdmin();
+      allow create: if isSignedIn() && isValidUser(incoming()) && incoming().role == 'USER' && incoming().id == request.auth.uid;
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'surname', 'phone', 'whatsapp', 'addresses', 'photo', 'googleLocation'])) || isAdmin()
+      );
+    }
+
+    match /orders/{orderId} {
+      function isValidOrder(data) {
+        return data.userId is string && data.userId.size() <= 128
+          && data.type in ['DAILY', 'PARTY', 'CUSTOM']
+          && data.status in ['PENDING', 'COOKING', 'PAID', 'COMPLETED', 'CANCELLED']
+          && data.otp is string && data.otp.size() == 6
+          && data.createdAt is timestamp;
+      }
+
+      allow get: if isSignedIn() && (isOwner(existing().userId) || isOwner(existing().chefId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.chefId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidOrder(incoming()) && isOwner(incoming().userId) && incoming().status == 'PENDING' && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidOrder(incoming()) && (
+        (existing().status == 'PENDING' && incoming().status == 'PENDING' && incoming().diff(existing()).affectedKeys().hasOnly(['chefId', 'chefName', 'chefPhone'])) ||
+        (existing().status == 'PENDING' && incoming().status == 'COOKING' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        (existing().status == 'COOKING' && incoming().status == 'PAID' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'totalAmount'])) ||
+        isAdmin()
+      );
+    }
+
+    match /config/main {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+    }
+  }
+}

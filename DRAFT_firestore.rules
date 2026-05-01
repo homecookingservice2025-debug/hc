@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.id == userId
+          && data.role is string && data.role.size() <= 20
+          && data.email is string && data.email.size() <= 100
+          && (!('name' in data) || (data.name is string && data.name.size() <= 50))
+          && (!('addresses' in data) || (data.addresses is list && data.addresses.size() <= 10));
+      }
+
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && isValidUser(incoming()) 
+        && incoming().role == 'USER' // Users can only create USER role profiles for themselves
+        && incoming().id == request.auth.uid;
+
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
+        // Action: Update Profile (User cannot change role or id)
+        (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'surname', 'phone', 'whatsapp', 'addresses', 'photo', 'googleLocation']))
+        || isAdmin()
+      );
+    }
+
+    // 2. Orders Collection
+    match /orders/{orderId} {
+      function isValidOrder(data) {
+        return data.userId is string && data.userId.size() <= 128
+          && data.type in ['DAILY', 'PARTY', 'CUSTOM']
+          && data.status in ['PENDING', 'COOKING', 'PAID', 'COMPLETED', 'CANCELLED']
+          && data.otp is string && data.otp.size() == 6
+          && data.createdAt is timestamp;
+      }
+
+      allow get: if isSignedIn() && (isOwner(existing().userId) || isOwner(existing().chefId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.chefId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidOrder(incoming())
+        && isOwner(incoming().userId)
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() && isValidOrder(incoming()) && (
+        // Action: Accept Order (Chef signs up)
+        (existing().status == 'PENDING' && incoming().status == 'PENDING' && incoming().diff(existing()).affectedKeys().hasOnly(['chefId', 'chefName', 'chefPhone'])) ||
+        // Action: Start Cooking (Chef enters OTP)
+        (existing().status == 'PENDING' && incoming().status == 'COOKING' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        // Action: Complete/Pay
+        (existing().status == 'COOKING' && incoming().status == 'PAID' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'totalAmount'])) ||
+        isAdmin()
+      );
+    }
+
+    // 3. Config
+    match /config/main {
+      allow read: if true; // Public config
+      allow write: if isAdmin();
+    }
+    
+    // Admin list
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via console
+    }
+  }
+}

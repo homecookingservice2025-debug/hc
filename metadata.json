@@ -1,0 +1,8 @@
+{
+  "name": "Remix: HC Home Cooking",
+  "description": "A comprehensive home cooking management platform connecting users with professional chefs for daily and party meals.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}

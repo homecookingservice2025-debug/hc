@@ -18,9 +18,16 @@ const firebaseConfig = {
   firestoreDatabaseId: env.VITE_FIREBASE_DATABASE_ID || "ai-studio-c8ecaf03-8d30-445c-81b9-b7639c206a04"
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (error) {
+  console.error("Firebase Initialization Error:", error);
+  // Create a dummy app or handle gracefully
+  app = { name: '[DEFAULT]', options: {}, automaticDataCollectionEnabled: false };
+}
+export const db = getFirestore(app as any, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app as any);
 export const googleProvider = new GoogleAuthProvider();
 
 // Critical: Test connection

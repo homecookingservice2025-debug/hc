@@ -26,7 +26,18 @@ import LandingPage from './components/LandingPage';
 
 export default function App() {
   const [user, setUser] = useState<UserType | null>(null);
-  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [config, setConfig] = useState<AppConfig | null>({
+    address: 'Lucknow, Uttar Pradesh',
+    contactEmail: 'hchomecookingservices@gmail.com',
+    contactPhone: '+91 85438 98295',
+    upiId: 'hc@upi',
+    aboutUs: 'We are HC Home Cooking, Lucknow\'s premier professional chef service.',
+    mission: 'Providing healthy, hygienic, and affordable home-style Indian meals.',
+    vision: 'To be the most trusted professional chef service in Lucknow.',
+    directorName: 'Mr. Amreesh Kumar Gupta',
+    homeBannerUrl: 'https://images.unsplash.com/photo-1589302168068-964664d93dc9?auto=format&fit=crop&q=80&w=1000',
+    homeBannerType: 'image'
+  });
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
@@ -34,27 +45,38 @@ export default function App() {
 
   const refreshConfig = () => {
     fetch('/api/config')
-      .then(res => res.json())
-      .then(setConfig);
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) setConfig(data);
+      })
+      .catch(err => console.warn("Failed to fetch config, using default", err));
   };
 
   useEffect(() => {
     refreshConfig();
     
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Fetch full user data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          setUser(userDoc.data() as UserType);
+      try {
+        if (firebaseUser) {
+          // Fetch full user data from Firestore
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            setUser(userDoc.data() as UserType);
+          } else {
+            console.warn("User authenticated but no Firestore profile found.");
+            // If it's a legacy user or just signed up, we might need to handle it
+            // For now, we'll just set user to null if no profile exists
+            setUser(null);
+          }
         } else {
-          // If profile doesn't exist in Firestore, maybe fallback to legacy or just sign out
-          console.warn("User authenticated but no Firestore profile found.");
+          setUser(null);
         }
-      } else {
+      } catch (error) {
+        console.error("Auth sync error:", error);
         setUser(null);
+      } finally {
+        setLoadingAuth(false);
       }
-      setLoadingAuth(false);
     });
 
     return () => unsubscribe();

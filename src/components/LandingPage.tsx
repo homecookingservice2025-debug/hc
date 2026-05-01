@@ -37,7 +37,14 @@ const Logo = ({ className }: { className?: string }) => (
 );
 
 export default function LandingPage({ config, onExplore }: { config: AppConfig | null, onExplore: () => void }) {
-  if (!config) return null;
+  const configToUse = config || {
+    address: 'Lucknow',
+    contactEmail: 'hchomecookingservices@gmail.com',
+    contactPhone: '+91 85438 98295',
+    upiId: 'hc@upi',
+    homeBannerUrl: 'https://images.unsplash.com/photo-1589302168068-964664d93dc9?auto=format&fit=crop&q=80&w=1000',
+    homeBannerType: 'image'
+  } as AppConfig;
 
   return (
     <div className="bg-[#FFFBFA] selection:bg-red-100 min-h-screen font-sans">
@@ -114,10 +121,10 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
               viewport={{ once: true }}
               className="relative rounded-[4rem] overflow-hidden shadow-2xl aspect-[4/5] lg:aspect-square"
            >
-              {config.homeBannerType === 'video' ? (
-                <video src={config.homeBannerUrl} autoPlay loop muted className="w-full h-full object-cover" />
+              {configToUse.homeBannerType === 'video' ? (
+                <video src={configToUse.homeBannerUrl} autoPlay loop muted className="w-full h-full object-cover" />
               ) : (
-                <img src={config.homeBannerUrl} alt="Hero" className="w-full h-full object-cover" />
+                <img src={configToUse.homeBannerUrl} alt="Hero" className="w-full h-full object-cover" />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-12">
                  <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20">
@@ -202,22 +209,22 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
       </section>
 
       {/* Reference Images Section */}
-      {(config.partyMenuImageUrl || config.dailyVegImageUrl) && (
+      {(configToUse.partyMenuImageUrl || configToUse.dailyVegImageUrl) && (
         <section className="py-24 px-8 bg-white border-b border-gray-100">
           <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10">
-            {config.partyMenuImageUrl && (
+            {configToUse.partyMenuImageUrl && (
               <div className="space-y-4">
                 <h4 className="text-sm font-black uppercase tracking-widest text-red-600 italic">Party Special Menu Reference</h4>
                 <div className="rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl aspect-[4/3]">
-                  <img src={config.partyMenuImageUrl} className="w-full h-full object-cover" alt="Party Menu" />
+                  <img src={configToUse.partyMenuImageUrl} className="w-full h-full object-cover" alt="Party Menu" />
                 </div>
               </div>
             )}
-            {config.dailyVegImageUrl && (
+            {configToUse.dailyVegImageUrl && (
               <div className="space-y-4">
                 <h4 className="text-sm font-black uppercase tracking-widest text-emerald-600 italic">Daily Vegetable List</h4>
                 <div className="rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl aspect-[4/3]">
-                  <img src={config.dailyVegImageUrl} className="w-full h-full object-cover" alt="Daily Veg" />
+                  <img src={configToUse.dailyVegImageUrl} className="w-full h-full object-cover" alt="Daily Veg" />
                 </div>
               </div>
             )}
@@ -269,7 +276,7 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
               <h2 className="text-5xl font-black tracking-tight">About HC Home Cooking</h2>
            </div>
            <p className="text-2xl font-bold text-gray-600 leading-relaxed italic border-l-8 border-red-600 pl-8">
-              {config.aboutUs}
+              {configToUse.aboutUs}
            </p>
         </div>
       </section>
@@ -287,7 +294,7 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
                </div>
                <h3 className="text-3xl font-black">Our Mission</h3>
                <p className="text-xl text-gray-400 font-medium leading-relaxed italic">
-                  {config.mission}
+                  {configToUse.mission}
                </p>
             </motion.div>
 
@@ -301,7 +308,7 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
                </div>
                <h3 className="text-3xl font-black">Our Vision</h3>
                <p className="text-xl text-gray-400 font-medium leading-relaxed italic">
-                  {config.vision}
+                  {configToUse.vision}
                </p>
             </motion.div>
         </div>
@@ -318,13 +325,13 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
               >
                  <div className="absolute -inset-4 bg-red-600/10 rounded-[5rem] blur-2xl group-hover:bg-red-600/20 transition-all" />
                  <img 
-                    src={config.directorPhoto} 
+                    src={configToUse.directorPhoto} 
                     alt="Director" 
                     className="relative w-full aspect-square object-cover rounded-[4rem] shadow-2xl z-10 grayscale hover:grayscale-0 transition-all duration-700" 
                  />
                  <div className="absolute -bottom-10 -right-10 bg-white p-8 rounded-[3rem] shadow-xl z-20 border border-gray-100 hidden md:block">
                     <p className="text-xs font-black uppercase tracking-widest text-red-600 mb-1">Director</p>
-                    <h4 className="text-xl font-black text-gray-900">{config.directorName}</h4>
+                    <h4 className="text-xl font-black text-gray-900">{configToUse.directorName}</h4>
                  </div>
               </motion.div>
 
@@ -338,12 +345,12 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
                     <h2 className="text-5xl font-black tracking-tighter leading-tight">💬 Director’s Message</h2>
                  </div>
                  <div className="space-y-6 text-lg text-gray-600 font-medium leading-relaxed">
-                    {config.directorMessage?.split('\n').map((line, i) => (
+                    {configToUse.directorMessage?.split('\n').map((line: string, i: number) => (
                       <p key={i}>{line}</p>
                     ))}
                  </div>
                  <div className="pt-6 border-t border-gray-200">
-                    <p className="text-xl font-black text-gray-900">— {config.directorName}</p>
+                    <p className="text-xl font-black text-gray-900">— {configToUse.directorName}</p>
                     <p className="text-sm font-bold text-gray-400">Director, HC Home Cooking.</p>
                  </div>
               </motion.div>
@@ -367,7 +374,7 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
                        </div>
                        <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Phone & WhatsApp</p>
-                          <p className="text-xl font-bold">{config.contactPhone}</p>
+                          <p className="text-xl font-bold">{configToUse.contactPhone}</p>
                        </div>
                     </div>
 
@@ -377,7 +384,7 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
                        </div>
                        <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Email Address</p>
-                          <p className="text-xl font-bold">{config.contactEmail}</p>
+                          <p className="text-xl font-bold">{configToUse.contactEmail}</p>
                        </div>
                     </div>
 
@@ -387,7 +394,7 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
                        </div>
                        <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Headquarters (Lucknow Only)</p>
-                          <p className="text-lg font-bold leading-tight">{config.address}</p>
+                          <p className="text-lg font-bold leading-tight">{configToUse.address}</p>
                        </div>
                     </div>
                  </div>
@@ -416,9 +423,9 @@ export default function LandingPage({ config, onExplore }: { config: AppConfig |
          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
             <Logo />
             <div className="flex gap-10">
-               <PolicyModal title="Privacy Policy" content={config.privacyPolicy} />
-               <PolicyModal title="Terms and Conditions" content={config.termsAndConditions} />
-               <PolicyModal title="Refund Policy" content={config.refundPolicy} />
+               <PolicyModal title="Privacy Policy" content={configToUse.privacyPolicy} />
+               <PolicyModal title="Terms and Conditions" content={configToUse.termsAndConditions} />
+               <PolicyModal title="Refund Policy" content={configToUse.refundPolicy} />
             </div>
             <div className="flex flex-col items-center md:items-end gap-2">
                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">© 2026 HC Home Cooking | Lucknow, India</p>

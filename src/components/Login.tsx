@@ -58,14 +58,22 @@ export default function Login({ onLogin, config }: LoginProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isRegistering ? { name, surname: '', email, password, role, isVerified: true, phone: '', whatsapp, googleLocation } : { email, password, role })
     }).then(async res => {
-      const data = await res.json();
-      if (res.ok) {
-        onLogin(data);
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await res.json();
+        if (res.ok) {
+          onLogin(data);
+        } else {
+          setError(data.error || (isRegistering ? 'Registration failed' : 'Login failed'));
+        }
       } else {
-        setError(data.error || (isRegistering ? 'Registration failed' : 'Login failed'));
+        const text = await res.text();
+        console.error("Non-JSON response:", text);
+        setError('Server error: API not reachable or misconfigured');
       }
-    }).catch(() => {
-      setError('Connection error');
+    }).catch((err) => {
+      console.error("Login fetch error:", err);
+      setError('Connection error: Please check your internet or server status');
     }).finally(() => {
       setLoading(false);
     });

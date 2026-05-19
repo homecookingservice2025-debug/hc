@@ -28,7 +28,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Mock Databases
 let users: User[] = [
-  { id: 'admin', role: UserRole.ADMIN, name: 'HC', surname: 'Admin', email: 'admin@hc.com', phone: '1234567890', isVerified: true },
+  { id: 'admin', role: UserRole.ADMIN, name: 'HC', surname: 'Admin', email: 'admin@cook.com', phone: '1234567890', isVerified: true },
   { id: 'chef12', role: UserRole.CHEF, name: 'Vikram', surname: 'Singh', email: 'chef@hc.com', phone: '1112223334', isVerified: true, isOnline: true },
   { id: 'm1', role: UserRole.MANAGER, name: 'Raj', surname: 'Mehta', email: 'manager@hc.com', phone: '9123456789', isVerified: true },
   { id: 'user', role: UserRole.USER, name: 'Amit', surname: 'Kumar', email: 'user@gmail.com', phone: '7123456789', whatsapp: '7123456789', customerCode: 'CUST001', addresses: [{ id: '1', label: 'Home', address: '123 Main St' }], isVerified: true },
@@ -107,7 +107,7 @@ app.put("/api/users/:id", (req, res) => {
 app.post("/api/login", (req, res) => {
   const { email, password, role } = req.body;
   const credentials: Record<string, { id: string, pass: string, role: UserRole }> = {
-    'admin': { id: 'admin', pass: 'admin@hc', role: UserRole.ADMIN },
+    'admin': { id: 'admin', pass: '123456', role: UserRole.ADMIN },
     'm1': { id: 'm1', pass: '12345', role: UserRole.MANAGER },
     'user': { id: 'user', pass: '12345', role: UserRole.USER },
     'chef12': { id: 'chef12', pass: '12345', role: UserRole.CHEF },
@@ -191,10 +191,14 @@ app.post("/api/phonepe/pay", async (req, res) => {
         });
       }
 
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const host = req.headers.host;
+      const baseUrl = `${protocol}://${host}`;
+
       const request = StandardCheckoutPayRequest.builder()
         .merchantOrderId(merchantOrderId)
         .amount(amount * 100)
-        .redirectUrl(redirectUrl || "http://localhost:3000/orders")
+        .redirectUrl(redirectUrl || `${baseUrl}/orders`)
         .build();
       const response = await phonepeClient.pay(request);
       res.json({ success: true, redirectUrl: response.redirectUrl, orderId: response.orderId });
@@ -217,7 +221,7 @@ async function setupVite(app: any) {
   }
 }
 
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+if (process.env.NODE_ENV !== 'production' || (!process.env.VERCEL && !process.env.NETLIFY)) {
   setupVite(app).then(() => {
     const httpServer = createServer(app);
     const io = new Server(httpServer, { cors: { origin: "*" } });

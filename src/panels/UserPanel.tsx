@@ -23,10 +23,8 @@ import { User, Order, AppConfig, MenuItem, OrderStatus, OrderType, UserAddress }
 import { formatCurrency, cn, generateOTP } from '../lib/utils';
 import { SEASONS, PARTY_CATEGORIES } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
-import { io } from 'socket.io-client';
 import { QRCodeSVG } from 'qrcode.react';
-
-const socket = io();
+import { api } from '../services/api';
 
 export default function UserPanel({ user, config }: { user: User, config: AppConfig | null }) {
   const [activeTab, setActiveTab] = useState<'book' | 'orders' | 'profile'>('book');
@@ -61,44 +59,31 @@ export default function UserPanel({ user, config }: { user: User, config: AppCon
     );
   };
   useEffect(() => {
-    fetch('/api/menu').then(res => res.json()).then(setMenu);
-    fetch('/api/orders').then(res => res.json()).then(data => {
-      setMyOrders(data.filter((o: Order) => o.userId === user.id).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    });
-    fetch(`/api/users`).then(res => res.json()).then(users => {
-      const u = users.find((u: any) => u.id === user.id);
+    const loadData = async () => {
+      const menuData = await api.getMenu();
+      setMenu(menuData);
+      
+      const ordersData = await api.getOrders();
+      setMyOrders(ordersData.filter((o: Order) => o.userId === user.id).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      
+      const userData = await api.getUsers();
+      const u = userData.find((u: any) => u.id === user.id);
       if (u) setCurrentUser(u);
-    });
-
-    socket.on('orderAccepted', ({ orderId, chefId }) => {
-       fetch('/api/orders').then(res => res.json()).then(data => {
-        setMyOrders(data.filter((o: Order) => o.userId === user.id).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      });
-    });
-
-    socket.on('orderUpdated', (order: Order) => {
-      if (order.userId === user.id) {
-        setMyOrders(prev => prev.map(o => o.id === order.id ? order : o));
-      }
-    });
-
-    return () => { 
-      socket.off('orderAccepted'); 
-      socket.off('orderUpdated');
     };
+    
+    loadData();
   }, [user.id]);
 
-  const updateProfile = (updates: Partial<User>) => {
-    fetch(`/api/users/${currentUser.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    }).then(res => res.json()).then(updated => {
+  const updateProfile = async (updates: Partial<User>) => {
+    try {
+      const updated = await api.updateUser(currentUser.id, updates);
       setCurrentUser(updated);
-    });
+    } catch (err) {
+      alert('Failed to update profile');
+    }
   };
 
-  const handleBook = () => {
+  const handleBook = async () => {
     if (!selectedAddress) return alert('Please select a delivery address in Profile tab first');
     
     let itemsToBook = [...selectedItems];
@@ -133,39 +118,25 @@ export default function UserPanel({ user, config }: { user: User, config: AppCon
       totalAmount: orderType === 'PARTY' ? (555 * plateCount) : itemsToBook.reduce((acc, curr) => acc + curr.price, 0)
     };
 
-    fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newOrder)
-    }).then(res => res.json()).then(async saved => {
+    try {
+      const saved = await api.createOrder(newOrder as any);
       setMyOrders([saved, ...myOrders]);
       
-      // If it's a PARTY order, initiate payment immediately (50% or full as per business rule, here we use total)
       if (orderType === 'PARTY') {
-        try {
-          const payRes = await fetch('/api/phonepe/pay', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: saved.totalAmount,
-              orderId: saved.id,
-              redirectUrl: window.location.origin + '/orders'
-            })
-          });
-          const payData = await payRes.json();
-          if (payData.redirectUrl) {
-            window.location.href = payData.redirectUrl;
-            return;
-          }
-        } catch (err) {
-          console.error("Payment initiation failed", err);
+        const payData = await api.processPayment(saved.totalAmount, saved.id, window.location.origin + '/orders');
+        if (payData.redirectUrl) {
+          window.location.href = payData.redirectUrl;
+          return;
         }
       }
-
+    } catch (err) {
+      console.error("Booking failed", err);
+      alert('Failed to place order');
+    } finally {
       setIsBooking(false);
       setActiveTab('orders');
       setSelectedItems([]);
-    });
+    }
   };
 
   const toggleItem = (item: MenuItem) => {

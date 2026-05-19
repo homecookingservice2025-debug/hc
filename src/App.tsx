@@ -18,68 +18,38 @@ import ChefPanel from './panels/ChefPanel';
 import Login from './components/Login';
 import socket from './services/socket';
 import { cn } from './lib/utils';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth, db } from './lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { api } from './services/api';
 
 import LandingPage from './components/LandingPage';
 
 export default function App() {
   const [user, setUser] = useState<UserType | null>(null);
-  const [config, setConfig] = useState<AppConfig | null>({
-    address: 'Lucknow, Uttar Pradesh',
-    contactEmail: 'hchomecookingservices@gmail.com',
-    contactPhone: '+91 85438 98295',
-    upiId: 'hc@upi',
-    aboutUs: 'We are HC Home Cooking, Lucknow\'s premier professional chef service.',
-    mission: 'Providing healthy, hygienic, and affordable home-style Indian meals.',
-    vision: 'To be the most trusted professional chef service in Lucknow.',
-    directorName: 'Mr. Amreesh Kumar Gupta',
-    homeBannerUrl: 'https://images.unsplash.com/photo-1589302168068-964664d93dc9?auto=format&fit=crop&q=80&w=1000',
-    homeBannerType: 'image'
-  });
+  const [config, setConfig] = useState<AppConfig | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  const refreshConfig = () => {
-    fetch('/api/config')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data) setConfig(data);
-      })
-      .catch(err => console.warn("Failed to fetch config, using default", err));
+  const refreshConfig = async () => {
+    try {
+      const data = await api.getConfig();
+      setConfig(data);
+    } catch (err) {
+      console.warn("Failed to fetch config", err);
+    }
   };
 
   useEffect(() => {
-    refreshConfig();
-    
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          // Fetch full user data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
-            setUser(userDoc.data() as UserType);
-          } else {
-            console.warn("User authenticated but no Firestore profile found.");
-            // If it's a legacy user or just signed up, we might need to handle it
-            // For now, we'll just set user to null if no profile exists
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error("Auth sync error:", error);
-        setUser(null);
-      } finally {
-        setLoadingAuth(false);
+    const init = async () => {
+      await refreshConfig();
+      // Auto-login from localStorage if session exists
+      const savedUser = localStorage.getItem('hc_session_user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
       }
-    });
-
-    return () => unsubscribe();
+      setLoadingAuth(false);
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -121,7 +91,7 @@ export default function App() {
   }, [user]);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    localStorage.removeItem('hc_session_user');
     setUser(null);
   };
 
@@ -145,7 +115,11 @@ export default function App() {
            <div className="w-20" />
         </nav>
         <div className="flex-1 flex items-center justify-center">
-          <Login onLogin={(u) => { setUser(u); setShowLogin(false); }} config={config} />
+          <Login onLogin={(u) => { 
+  setUser(u); 
+  localStorage.setItem('hc_session_user', JSON.stringify(u));
+  setShowLogin(false); 
+}} config={config} />
         </div>
       </div>;
     }

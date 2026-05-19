@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import { User, Order, OrderStatus, AppConfig } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
-import socket from '../services/socket';
 import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../services/api';
 
 export default function ChefPanel({ user, config }: { user: User, config: AppConfig | null }) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -26,55 +26,26 @@ export default function ChefPanel({ user, config }: { user: User, config: AppCon
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchOrders();
-    
-    // Fetch and filter withdrawals
-    fetch('/api/withdrawals')
-      .then(res => res.json())
-      .then(data => {
-        const myWithdrawals = data.filter((w: any) => w.chefId === user.id);
-        setWithdrawals(myWithdrawals);
-        
-        // Calculate balance: Total Earnings - Total Withdrawn
-        fetch('/api/orders')
-          .then(res => res.json())
-          .then(allOrders => {
-             const myEarnings = allOrders
-               .filter((o: Order) => o.chefId === user.id && o.status === OrderStatus.PAID)
-               .reduce((acc: number, o: Order) => acc + (o.commissionChef || 0), 0);
-             
-             const totalWithdrawn = myWithdrawals
-               .filter((w: any) => w.status !== 'REJECTED')
-               .reduce((acc: number, w: any) => acc + w.amount, 0);
-             
-             setWalletBalance(myEarnings - totalWithdrawn);
-          });
-      });
-    
-    socket.on('newOrderNotification', (order) => {
-      if (isOnline) {
-        setOrders(prev => [order, ...prev]);
-        // Sound already handled in App.tsx but we can add UI flash here
-      }
-    });
-
-    socket.on('orderAccepted', ({ orderId, chefId }) => {
-      if (chefId !== user.id) {
-        setOrders(prev => prev.filter(o => o.id !== orderId));
-      }
-    });
-
-    socket.on('orderStatusChanged', (order: Order) => {
-      if (order.chefId === user.id) {
-        setActiveOrder(order);
-      }
-    });
-
-    return () => {
-      socket.off('newOrderNotification');
-      socket.off('orderAccepted');
-      socket.off('orderStatusChanged');
+    const loadData = async () => {
+      await fetchOrders();
+      
+      const withdrawalsData = await api.getWithdrawals();
+      const myWithdrawals = withdrawalsData.filter((w: any) => w.chefId === user.id);
+      setWithdrawals(myWithdrawals);
+      
+      const allOrders = await api.getOrders();
+      const myEarnings = allOrders
+        .filter((o: Order) => o.chefId === user.id && o.status === OrderStatus.PAID)
+        .reduce((acc: number, o: Order) => acc + (o.commissionChef || 0), 0);
+      
+      const totalWithdrawn = myWithdrawals
+        .filter((w: any) => w.status !== 'REJECTED')
+        .reduce((acc: number, w: any) => acc + w.amount, 0);
+      
+      setWalletBalance(myEarnings - totalWithdrawn);
     };
+    
+    loadData();
   }, [isOnline]);
 
   useEffect(() => {
@@ -87,108 +58,102 @@ export default function ChefPanel({ user, config }: { user: User, config: AppCon
     return () => clearInterval(interval);
   }, [activeOrder]);
 
-  const fetchOrders = () => {
-    fetch('/api/orders')
-      .then(res => res.json())
-      .then(data => {
-        setOrders(data.filter((o: Order) => o.status === OrderStatus.PENDING && !o.chefId));
-        const active = data.find((o: Order) => o.chefId === user.id && (o.status === OrderStatus.COOKING || o.status === OrderStatus.PENDING));
-        if (active) setActiveOrder(active);
-      });
+  const fetchOrders = async () => {
+    try {
+      const data = await api.getOrders();
+      setOrders(data.filter((o: Order) => o.status === OrderStatus.PENDING && !o.chefId));
+      const active = data.find((o: Order) => o.chefId === user.id && (o.status === OrderStatus.COOKING || o.status === OrderStatus.PENDING));
+      if (active) setActiveOrder(active);
+    } catch (err) {
+      console.warn("Failed to fetch orders", err);
+    }
   };
 
   const toggleOnline = () => {
-    const next = !isOnline;
-    setIsOnline(next);
-    socket.emit('setStatus', { userId: user.id, isOnline: next });
+    setIsOnline(!isOnline);
   };
 
-  const acceptOrder = (order: Order) => {
-    fetch(`/api/orders/${order.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+  const acceptOrder = async (order: Order) => {
+    try {
+      const updated = await api.updateOrder(order.id, { 
         chefId: user.id,
         chefName: `${user.name} ${user.surname}`,
         chefPhone: user.phone || user.whatsapp
-      })
-    }).then(res => res.json()).then(updated => {
+      });
       setActiveOrder(updated);
       setOrders(prev => prev.filter(o => o.id !== order.id));
-    });
+    } catch (err) {
+      alert('Failed to accept order');
+    }
   };
 
-  const startCooking = () => {
+  const startCooking = async () => {
     if (otpInput === activeOrder?.otp) {
-      fetch(`/api/orders/${activeOrder.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: OrderStatus.COOKING, startTime: new Date() })
-      }).then(res => res.json()).then(setActiveOrder);
+      try {
+        const updated = await api.updateOrder(activeOrder.id, { status: OrderStatus.COOKING, startTime: new Date() });
+        setActiveOrder(updated);
+      } catch (err) {
+        alert('Failed to start cooking');
+      }
     } else {
       alert('Invalid OTP');
     }
   };
 
-  const endCooking = () => {
+  const endCooking = async () => {
     const rate = config?.cookingRatePerMin || 3;
     const totalMin = Math.ceil(elapsedTime / 60);
     const amount = totalMin * rate;
     const commAdmin = Math.round(amount * 0.3);
     const commChef = amount - commAdmin;
 
-    fetch(`/api/orders/${activeOrder!.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+    try {
+      const updated = await api.updateOrder(activeOrder!.id, { 
         status: OrderStatus.PAYMENT_PENDING, 
         endTime: new Date(),
         totalAmount: amount,
         commissionAdmin: commAdmin,
         commissionChef: commChef
-      })
-    }).then(res => res.json()).then(updated => {
+      });
       setActiveOrder(updated);
-      // We don't null activeOrder here, we keep it to show the payment status
-    });
+    } catch (err) {
+      alert('Failed to end cooking');
+    }
   };
 
-  const collectCash = () => {
-    fetch(`/api/orders/${activeOrder!.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: OrderStatus.PAID })
-    }).then(res => res.json()).then(() => {
+  const collectCash = async () => {
+    try {
+      const updated = await api.updateOrder(activeOrder!.id, { status: OrderStatus.PAID });
       setActiveOrder(null);
       setElapsedTime(0);
       setOtpInput('');
-    });
+    } catch (err) {
+      alert('Failed to update payment');
+    }
   };
 
-  const requestWithdrawal = () => {
+  const requestWithdrawal = async () => {
      if (walletBalance < 100) return alert('Minimum withdrawal is Rs. 100');
      setIsWithdrawing(true);
-     fetch('/api/withdrawals', {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ 
+     try {
+       await api.createWithdrawal({ 
          chefId: user.id, 
          chefName: `${user.name} ${user.surname}`,
          amount: walletBalance, 
          status: 'PENDING',
          bankDetails: user.bankDetails,
          createdAt: new Date()
-       })
-     }).then(() => {
-        setWalletBalance(0);
-        setIsWithdrawing(false);
-        alert('Withdrawal Request Sent Successfully!');
-        
-        // Refresh list
-        fetch('/api/withdrawals')
-          .then(res => res.json())
-          .then(data => setWithdrawals(data.filter((w: any) => w.chefId === user.id)));
-     });
+       });
+       setWalletBalance(0);
+       setIsWithdrawing(false);
+       alert('Withdrawal Request Sent Successfully!');
+       
+       const data = await api.getWithdrawals();
+       setWithdrawals(data.filter((w: any) => w.chefId === user.id));
+     } catch (err) {
+       alert('Withdrawal failed');
+       setIsWithdrawing(false);
+     }
   };
 
   const shareAddressOnWhatsApp = (address: string) => {

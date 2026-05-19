@@ -11,6 +11,7 @@ import {
 import { User, Order, WithdrawalRequest } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion } from 'motion/react';
+import { api } from '../services/api';
 
 export default function ManagerPanel({ user }: { user: User }) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -18,25 +19,29 @@ export default function ManagerPanel({ user }: { user: User }) {
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0 });
 
   useEffect(() => {
-    fetch('/api/orders').then(res => res.json()).then(data => {
-      setOrders(data);
+    const loadData = async () => {
+      const ordersData = await api.getOrders();
+      setOrders(ordersData);
       setStats({
-        total: data.length,
-        pending: data.filter((o: any) => o.status === 'PENDING').length,
-        active: data.filter((o: any) => o.status === 'COOKING').length
+        total: ordersData.length,
+        pending: ordersData.filter((o: any) => o.status === 'PENDING').length,
+        active: ordersData.filter((o: any) => o.status === 'COOKING').length
       });
-    });
-    fetch('/api/withdrawals').then(res => res.json()).then(setWithdrawals);
+      
+      const withdrawalsData = await api.getWithdrawals();
+      setWithdrawals(withdrawalsData);
+    };
+    
+    loadData();
   }, []);
 
-  const approveWithdrawal = (id: string) => {
-    fetch(`/api/withdrawals/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'APPROVED' })
-    }).then(() => {
+  const approveWithdrawal = async (id: string) => {
+    try {
+      await api.updateWithdrawal(id, { status: 'APPROVED' });
       setWithdrawals(prev => prev.map(w => w.id === id ? {...w, status: 'APPROVED'} : w));
-    });
+    } catch (err) {
+      alert('Failed to approve withdrawal');
+    }
   };
 
   return (

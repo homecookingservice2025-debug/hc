@@ -15,15 +15,10 @@ import {
   ClipboardList,
   QrCode,
   Headphones,
-  Star,
-  Upload,
-  Search
+  Star
 } from 'lucide-react';
 import { UserRole, User, AppConfig } from '../types';
 import { cn } from '../lib/utils';
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider, db } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -53,7 +48,11 @@ export default function Login({ onLogin, config }: LoginProps) {
     setLoading(true);
     setError('');
     
-    fetch(isRegistering ? '/api/users' : '/api/login', {
+    // Explicitly using absolute path in production environments if needed, 
+    // but relative path should work with Netlify redirects.
+    const endpoint = isRegistering ? '/api/users' : '/api/login';
+    
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isRegistering ? { name, surname: '', email, password, role, isVerified: true, phone: '', whatsapp, googleLocation } : { email, password, role })
@@ -69,7 +68,12 @@ export default function Login({ onLogin, config }: LoginProps) {
       } else {
         const text = await res.text();
         console.error("Non-JSON response:", text);
-        setError('Server error: API not reachable or misconfigured');
+        // Check if it's a Netlify 404
+        if (text.includes("Page Not Found") || text.includes("404")) {
+          setError(`API Endpoint not found (${res.status}). Check Netlify configuration.`);
+        } else {
+          setError(`Server error (${res.status}): Please contact support.`);
+        }
       }
     }).catch((err) => {
       console.error("Login fetch error:", err);
@@ -77,48 +81,6 @@ export default function Login({ onLogin, config }: LoginProps) {
     }).finally(() => {
       setLoading(false);
     });
-  };
-
-  const handleGoogleLogin = async () => {
-    if (role !== UserRole.USER) {
-      setError('Google login is currently active for customers only. Other roles must use registered IDs.');
-      return;
-    }
-    
-    setLoading(true);
-    setError('');
-    
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      // Check if user exists in Firestore
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      
-      if (userDoc.exists()) {
-        onLogin(userDoc.data() as User);
-      } else {
-        // Create new user record
-        const newUser: User = {
-          id: user.uid,
-          email: user.email || '',
-          name: user.displayName?.split(' ')[0] || 'User',
-          surname: user.displayName?.split(' ').slice(1).join(' ') || '',
-          role: UserRole.USER,
-          photo: user.photoURL || undefined,
-          phone: user.phoneNumber || '',
-          isVerified: true,
-          addresses: []
-        };
-        await setDoc(doc(db, 'users', user.uid), newUser);
-        onLogin(newUser);
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError('Google authentication failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
   };
 
   const roles = [
@@ -356,17 +318,8 @@ export default function Login({ onLogin, config }: LoginProps) {
             </form>
 
             <div className="my-10 flex items-center gap-4">
-              <div className="flex-1 h-px bg-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-300">Social login enabled</div>
+              <div className="flex-1 h-px bg-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-300">Login restricted to authorized personnel</div>
             </div>
-
-            <button 
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
-            >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
-              Continue with Google
-            </button>
 
             <p className="mt-8 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
               {role === UserRole.USER ? (

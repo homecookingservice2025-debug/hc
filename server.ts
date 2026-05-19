@@ -88,6 +88,7 @@ let config = {
 const apiRouter = express.Router();
 
 // Define API Routes on the router
+apiRouter.get("/test", (req, res) => res.json({ message: "API is working", time: new Date().toISOString() }));
 apiRouter.get("/health", (req, res) => res.json({ status: "ok", env: process.env.NODE_ENV }));
 apiRouter.get("/config", (req, res) => res.json(config));
 apiRouter.post("/config", (req, res) => {

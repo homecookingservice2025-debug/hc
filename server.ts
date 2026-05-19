@@ -84,16 +84,19 @@ let config = {
   cookingRatePerMin: 3
 };
 
-// API Routes
-app.get("/api/health", (req, res) => res.json({ status: "ok", env: process.env.NODE_ENV }));
-app.get("/api/config", (req, res) => res.json(config));
-app.post("/api/config", (req, res) => {
+// Initialize Express Router for API
+const apiRouter = express.Router();
+
+// Define API Routes on the router
+apiRouter.get("/health", (req, res) => res.json({ status: "ok", env: process.env.NODE_ENV }));
+apiRouter.get("/config", (req, res) => res.json(config));
+apiRouter.post("/config", (req, res) => {
   config = { ...config, ...req.body };
   res.json(config);
 });
 
-app.get("/api/users", (req, res) => res.json(users));
-app.put("/api/users/:id", (req, res) => {
+apiRouter.get("/users", (req, res) => res.json(users));
+apiRouter.put("/users/:id", (req, res) => {
   const { id } = req.params;
   const index = users.findIndex(u => u.id === id);
   if (index !== -1) {
@@ -104,7 +107,7 @@ app.put("/api/users/:id", (req, res) => {
   }
 });
 
-app.post("/api/login", (req, res) => {
+apiRouter.post("/login", (req, res) => {
   const { email, password, role } = req.body;
   const credentials: Record<string, { id: string, pass: string, role: UserRole }> = {
     'admin': { id: 'admin', pass: '123456', role: UserRole.ADMIN },
@@ -121,7 +124,7 @@ app.post("/api/login", (req, res) => {
   res.status(401).json({ error: "Invalid ID/Email or Password" });
 });
 
-app.post("/api/orders", (req, res) => {
+apiRouter.post("/orders", (req, res) => {
   const total = req.body.totalAmount || 0;
   const newOrder = { 
     id: Date.now().toString(), 
@@ -136,9 +139,9 @@ app.post("/api/orders", (req, res) => {
   res.json(newOrder);
 });
 
-app.get("/api/orders", (req, res) => res.json(orders));
+apiRouter.get("/orders", (req, res) => res.json(orders));
 
-app.put("/api/orders/:id", (req, res) => {
+apiRouter.put("/orders/:id", (req, res) => {
   const { id } = req.params;
   const index = orders.findIndex(o => o.id === id);
   if (index !== -1) {
@@ -161,7 +164,7 @@ app.put("/api/orders/:id", (req, res) => {
   }
 });
 
-app.post("/api/phonepe/pay", async (req, res) => {
+apiRouter.post("/phonepe/pay", async (req, res) => {
     try {
       const { amount, orderId, redirectUrl } = req.body;
       const merchantOrderId = orderId || uuidv4();
@@ -207,7 +210,17 @@ app.post("/api/phonepe/pay", async (req, res) => {
     }
 });
 
-app.get("/api/menu", (req, res) => res.json(menu));
+apiRouter.get("/menu", (req, res) => res.json(menu));
+
+console.log(`Initializing server in ${process.env.NODE_ENV} mode. Netlify: ${process.env.NETLIFY}, Vercel: ${process.env.VERCEL}`);
+
+// Mount the API Router
+app.use("/api", apiRouter);
+
+// Fallback: If running in Netlify/Vercel, also mount at root for cases where prefix is stripped
+if (process.env.NETLIFY || process.env.VERCEL) {
+  app.use("/", apiRouter);
+}
 
 async function setupVite(app: any) {
   if (process.env.NODE_ENV !== "production") {

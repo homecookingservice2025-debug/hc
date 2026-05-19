@@ -118,6 +118,7 @@ export default function AdminPanel({ user, config: initialConfig, onUpdateConfig
       surname: formData.get('surname') as string,
       email: formData.get('email') as string,
       phone: formData.get('phone') as string,
+      password: formData.get('password') as string,
       role: UserRole.CHEF,
       isVerified: true,
       bankDetails: {

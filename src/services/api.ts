@@ -1,4 +1,4 @@
-import { User, Order, UserRole, OrderStatus, AppConfig, MenuItem, WithdrawalRequest } from '../types';
+import { User, Order, UserRole, OrderStatus, AppConfig, MenuItem, WithdrawalRequest, OrderType } from '../types';
 
 // Storage keys
 const USERS_KEY = 'hc_users';
@@ -9,24 +9,25 @@ const MENU_KEY = 'hc_menu';
 // Initial Data
 const initialUsers: User[] = [
   { id: 'admin', role: UserRole.ADMIN, name: 'HC', surname: 'Admin', email: 'admin@cook.com', phone: '1234567890', isVerified: true },
+  { id: 'chef', role: UserRole.CHEF, name: 'Chef', surname: 'HC', email: 'chef@hc.com', phone: '12345', isVerified: true, isOnline: true },
   { id: 'chef12', role: UserRole.CHEF, name: 'Vikram', surname: 'Singh', email: 'chef@hc.com', phone: '1112223334', isVerified: true, isOnline: true },
   { id: 'm1', role: UserRole.MANAGER, name: 'Raj', surname: 'Mehta', email: 'manager@hc.com', phone: '9123456789', isVerified: true },
   { id: 'user', role: UserRole.USER, name: 'Amit', surname: 'Kumar', email: 'user@gmail.com', phone: '7123456789', whatsapp: '7123456789', customerCode: 'CUST001', addresses: [{ id: '1', label: 'Home', address: '123 Main St' }], isVerified: true },
 ];
 
-const initialMenu = [
-  { id: '1', name: 'Dal Tadka', price: 150, category: 'Lentils', type: 'DAILY' },
-  { id: '2', name: 'Paneer Butter Masala', price: 250, category: 'Main Course', type: 'DAILY' },
-  { id: '3', name: 'Jeera Rice', price: 120, category: 'Rice', type: 'DAILY' },
-  { id: '4', name: 'Gulab Jamun', price: 60, category: 'Dessert', type: 'DAILY' },
-  { id: 'p1', name: 'Coffee', price: 555, category: 'Welcome Drinks', type: 'PARTY' },
-  { id: 'p2', name: 'Jaljeera', price: 555, category: 'Welcome Drinks', type: 'PARTY' },
-  { id: 'p3', name: 'Shikanji', price: 555, category: 'Welcome Drinks', type: 'PARTY' },
-  { id: 'p4', name: 'Cold Drink', price: 555, category: 'Welcome Drinks', type: 'PARTY' },
-  { id: 'p5', name: 'Hot n Sour Soup', price: 555, category: 'Soup', type: 'PARTY' },
-  { id: 'p18', name: 'Paneer Butter Masala', price: 555, category: 'Paneer Ka Swad', type: 'PARTY' },
-  { id: 'p31', name: 'Dal Fry (Arhar)', price: 555, category: 'Dal Ki Rasoi', type: 'PARTY' },
-  { id: 'p40', name: 'Baby Naan', price: 555, category: 'Breads', type: 'PARTY' },
+const initialMenu: MenuItem[] = [
+  { id: '1', name: 'Dal Tadka', price: 150, category: 'Lentils', type: 'DAILY' as OrderType },
+  { id: '2', name: 'Paneer Butter Masala', price: 250, category: 'Main Course', type: 'DAILY' as OrderType },
+  { id: '3', name: 'Jeera Rice', price: 120, category: 'Rice', type: 'DAILY' as OrderType },
+  { id: '4', name: 'Gulab Jamun', price: 60, category: 'Dessert', type: 'DAILY' as OrderType },
+  { id: 'p1', name: 'Coffee', price: 555, category: 'Welcome Drinks', type: 'PARTY' as OrderType },
+  { id: 'p2', name: 'Jaljeera', price: 555, category: 'Welcome Drinks', type: 'PARTY' as OrderType },
+  { id: 'p3', name: 'Shikanji', price: 555, category: 'Welcome Drinks', type: 'PARTY' as OrderType },
+  { id: 'p4', name: 'Cold Drink', price: 555, category: 'Welcome Drinks', type: 'PARTY' as OrderType },
+  { id: 'p5', name: 'Hot n Sour Soup', price: 555, category: 'Soup', type: 'PARTY' as OrderType },
+  { id: 'p18', name: 'Paneer Butter Masala', price: 555, category: 'Paneer Ka Swad', type: 'PARTY' as OrderType },
+  { id: 'p31', name: 'Dal Fry (Arhar)', price: 555, category: 'Dal Ki Rasoi', type: 'PARTY' as OrderType },
+  { id: 'p40', name: 'Baby Naan', price: 555, category: 'Breads', type: 'PARTY' as OrderType },
 ];
 
 const initialConfig: AppConfig = {
@@ -67,10 +68,27 @@ class MockApiService {
 
   private credentials: Record<string, string> = {
     'admin': '123456',
+    'chef': '12345',
     'm1': '12345',
     'user': '12345',
     'chef12': '12345',
   };
+
+  constructor() {
+    // Ensure the requested chef is in the users list
+    const hasChef = this.users.some(u => u.id === 'chef');
+    if (!hasChef) {
+      this.users.push({ id: 'chef', role: UserRole.CHEF, name: 'Chef', surname: 'HC', email: 'chef@hc.com', phone: '12345', isVerified: true, isOnline: true });
+    }
+    
+    // Ensure the requested user is in the users list
+    const hasUser = this.users.some(u => u.id === 'user');
+    if (!hasUser) {
+      this.users.push({ id: 'user', role: UserRole.USER, name: 'Amit', surname: 'Kumar', email: 'user@gmail.com', phone: '7123456789', whatsapp: '7123456789', customerCode: 'CUST001', addresses: [{ id: '1', label: 'Home', address: '123 Main St' }], isVerified: true });
+    }
+    
+    saveToStorage(USERS_KEY, this.users);
+  }
 
   async login(email: string, password: string, role: UserRole): Promise<User> {
     const user = this.users.find(u => (u.id === email || u.email === email) && u.role === role);
@@ -89,10 +107,18 @@ class MockApiService {
     const index = this.users.findIndex(u => u.id === id);
     if (index !== -1) {
       this.users[index] = { ...this.users[index], ...updates };
+    } else {
+      // Create new user if not found (Upsert)
+      const newUser = { id, ...updates } as User;
+      this.users.push(newUser);
+      if ((updates as any).password) {
+        this.credentials[id] = (updates as any).password;
+      }
       saveToStorage(USERS_KEY, this.users);
-      return this.users[index];
+      return newUser;
     }
-    throw new Error("User not found");
+    saveToStorage(USERS_KEY, this.users);
+    return this.users[index];
   }
 
   async getOrders(): Promise<Order[]> {
@@ -156,7 +182,7 @@ class MockApiService {
       name: '',
       price: 0,
       category: '',
-      type: 'DAILY' as any,
+      type: 'DAILY',
       ...item as any
     };
     this.menu.push(newItem);
@@ -188,6 +214,20 @@ class MockApiService {
     withdrawals.push(newW);
     saveToStorage('hc_withdrawals', withdrawals);
     return newW;
+  }
+
+  async processPayment(amount: number, orderId: string, redirectUrl?: string): Promise<any> {
+    // Simulate successful payment
+    const index = this.orders.findIndex(o => o.id === orderId);
+    if (index !== -1) {
+      this.orders[index].status = OrderStatus.PAID;
+      saveToStorage(ORDERS_KEY, this.orders);
+    }
+    return {
+      success: true,
+      redirectUrl: redirectUrl || "/orders",
+      orderId: "MOCK_" + orderId
+    };
   }
 }
 

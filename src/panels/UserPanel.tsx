@@ -754,14 +754,13 @@ function OrderCard({ order, config }: OrderCardProps) {
                             onChange={e => setReview(e.target.value)}
                            />
                            <button 
-                            onClick={() => {
-                              fetch(`/api/orders/${order.id}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ rating, review })
-                              }).then(() => {
+                            onClick={async () => {
+                              try {
+                                await api.updateOrder(order.id, { rating, review });
                                 alert('Thank you for your rating!');
-                              });
+                              } catch (err) {
+                                alert('Failed to save rating');
+                              }
                             }}
                             className="bg-red-600 text-white w-10 h-10 rounded-xl flex items-center justify-center"
                            >

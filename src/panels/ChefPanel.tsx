@@ -51,12 +51,19 @@ export default function ChefPanel({ user, config }: { user: User, config: AppCon
   useEffect(() => {
     let interval: any;
     if (activeOrder && activeOrder.status === OrderStatus.COOKING) {
+      // Calculate initial elapsed time if startTime exists
+      if (activeOrder.startTime) {
+        const start = new Date(activeOrder.startTime).getTime();
+        const now = new Date().getTime();
+        setElapsedTime(Math.floor((now - start) / 1000));
+      }
+
       interval = setInterval(() => {
         setElapsedTime(prev => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [activeOrder]);
+  }, [activeOrder?.status, activeOrder?.startTime]);
 
   const fetchOrders = async () => {
     try {

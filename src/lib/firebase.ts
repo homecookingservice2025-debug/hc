@@ -53,20 +53,17 @@ export const auth = (() => {
 
 export const googleProvider = new GoogleAuthProvider();
 
-// Critical: Test connection (Non-blocking)
-async function testConnection() {
-  if (!app || !db.type) return; // Skip if initialization failed
+// Manual test function if needed
+export async function testConnection() {
+  if (!app || !db) return;
   try {
-    // Using a path that is allowed by security rules for public read
     await getDocFromServer(doc(db, 'config', 'main'));
     console.log("Firebase Connected Successfully");
   } catch (error: any) {
-    // Permission denied is actually a good sign (it means we reached the server)
     if (error.code === 'permission-denied') {
-        console.log("Firebase connected (auth boundary reached).");
+        console.log("Firebase connected (reachable).");
     } else {
-        console.warn("Firebase connection test warning:", error.message);
+        console.warn("Firebase test connection info:", error.message);
     }
   }
 }
-testConnection();

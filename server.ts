@@ -80,7 +80,8 @@ let config = {
   homeBannerUrl: 'https://images.unsplash.com/photo-1589302168068-964664d93dc9?auto=format&fit=crop&q=80&w=1000',
   homeBannerType: 'image',
   partyMenuImageUrl: '',
-  dailyVegImageUrl: ''
+  dailyVegImageUrl: '',
+  cookingRatePerMin: 3
 };
 
 // API Routes
@@ -137,11 +138,59 @@ app.post("/api/orders", (req, res) => {
 
 app.get("/api/orders", (req, res) => res.json(orders));
 
+app.put("/api/orders/:id", (req, res) => {
+  const { id } = req.params;
+  const index = orders.findIndex(o => o.id === id);
+  if (index !== -1) {
+    orders[index] = { ...orders[index], ...req.body };
+    const updatedOrder = orders[index];
+    
+    // Broadcast update to relevant users
+    if (global.io) {
+      global.io.emit('orderUpdated', updatedOrder);
+      // Also notify specifically the user and chef if we have their IDs in the socket rooms
+      global.io.to(updatedOrder.userId).emit('orderStatusChanged', updatedOrder);
+      if (updatedOrder.chefId) {
+        global.io.to(updatedOrder.chefId).emit('orderStatusChanged', updatedOrder);
+      }
+    }
+    
+    res.json(updatedOrder);
+  } else {
+    res.status(404).json({ error: "Order not found" });
+  }
+});
+
 app.post("/api/phonepe/pay", async (req, res) => {
     try {
-      if (!phonepeClient) return res.status(500).json({ error: "PhonePe not initialized" });
       const { amount, orderId, redirectUrl } = req.body;
       const merchantOrderId = orderId || uuidv4();
+
+      if (!phonepeClient) {
+        console.warn("PhonePe not initialized, using mock response");
+        
+        // Find and update order status for simulation
+        const orderIndex = orders.findIndex(o => o.id === orderId);
+        if (orderIndex !== -1) {
+          orders[orderIndex].status = OrderStatus.PAID;
+          const updatedOrder = orders[orderIndex];
+          
+          if (global.io) {
+            global.io.emit('orderUpdated', updatedOrder);
+            global.io.to(updatedOrder.userId).emit('orderStatusChanged', updatedOrder);
+            if (updatedOrder.chefId) {
+              global.io.to(updatedOrder.chefId).emit('orderStatusChanged', updatedOrder);
+            }
+          }
+        }
+
+        return res.json({ 
+          success: true, 
+          redirectUrl: redirectUrl || (process.env.VERCEL ? "/orders" : "/"), 
+          orderId: "MOCK_" + merchantOrderId 
+        });
+      }
+
       const request = StandardCheckoutPayRequest.builder()
         .merchantOrderId(merchantOrderId)
         .amount(amount * 100)
@@ -157,18 +206,14 @@ app.post("/api/phonepe/pay", async (req, res) => {
 app.get("/api/menu", (req, res) => res.json(menu));
 
 async function setupVite(app: any) {
-  if (process.env.NODE_ENV !== "production") {
+  // In Vercel, static files are handled by the vercel.json rewrites/builds.
+  // We only need Vite middleware for local development in AI Studio.
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 }
 
@@ -176,12 +221,13 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   setupVite(app).then(() => {
     const httpServer = createServer(app);
     const io = new Server(httpServer, { cors: { origin: "*" } });
+    (global as any).io = io;
     
     io.on("connection", (socket) => {
       socket.on("join", (userId) => socket.join(userId));
     });
 
-    const PORT = process.env.PORT || 3000;
+    const PORT = Number(process.env.PORT) || 3000;
     httpServer.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });

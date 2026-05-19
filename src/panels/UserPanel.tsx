@@ -76,7 +76,16 @@ export default function UserPanel({ user, config }: { user: User, config: AppCon
       });
     });
 
-    return () => { socket.off('orderAccepted'); };
+    socket.on('orderUpdated', (order: Order) => {
+      if (order.userId === user.id) {
+        setMyOrders(prev => prev.map(o => o.id === order.id ? order : o));
+      }
+    });
+
+    return () => { 
+      socket.off('orderAccepted'); 
+      socket.off('orderUpdated');
+    };
   }, [user.id]);
 
   const updateProfile = (updates: Partial<User>) => {
@@ -629,9 +638,11 @@ function OrderCard({ order, config }: OrderCardProps) {
                 <div className="flex items-center gap-2">
                    <span className={cn(
                      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                     order.status === OrderStatus.PAID ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                     order.status === OrderStatus.PAID ? "bg-green-50 text-green-600" : 
+                     order.status === OrderStatus.PAYMENT_PENDING ? "bg-orange-50 text-orange-600" :
+                     "bg-red-50 text-red-600"
                    )}>
-                     {order.status}
+                     {order.status.replace('_', ' ')}
                    </span>
                    <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">#{order.bookingId || order.id.slice(-6).toUpperCase()}</span>
                 </div>
@@ -704,12 +715,20 @@ function OrderCard({ order, config }: OrderCardProps) {
             </div>
           )}
 
-          {order.status !== OrderStatus.PAID && order.status !== OrderStatus.COMPLETED && (
+          {order.status === OrderStatus.PAYMENT_PENDING && (
+             <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 mb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Final Payment Due</p>
+                <div className="text-3xl font-black text-orange-700">{formatCurrency(order.totalAmount || 0)}</div>
+                <p className="text-[10px] font-bold text-orange-400 mt-2">Chef has ended the session. Please complete the payment below.</p>
+             </div>
+          )}
+
+          {order.status !== OrderStatus.PAID && order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && (
             <div className="space-y-3">
                <button 
                   onClick={handlePhonePePay}
-                  disabled={isPaying}
-                  className="w-full h-12 bg-[#5f259f] text-white rounded-xl flex items-center justify-center gap-2 font-black text-xs hover:scale-[1.02] transition-all shadow-lg"
+                  disabled={isPaying || (order.type === 'DAILY' && order.status !== OrderStatus.PAYMENT_PENDING)}
+                  className="w-full h-12 bg-[#5f259f] text-white rounded-xl flex items-center justify-center gap-2 font-black text-xs hover:scale-[1.02] transition-all shadow-lg disabled:opacity-50 disabled:grayscale"
                >
                   <CreditCard size={16} /> {isPaying ? 'Redirecting...' : 'Pay with PhonePe'}
                </button>

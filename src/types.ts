@@ -8,6 +8,7 @@ export enum UserRole {
 export enum OrderStatus {
   PENDING = 'PENDING',
   COOKING = 'COOKING',
+  PAYMENT_PENDING = 'PAYMENT_PENDING',
   PAID = 'PAID',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
@@ -113,4 +114,5 @@ export interface AppConfig {
   homeBannerType?: 'image' | 'video' | 'gif';
   partyMenuImageUrl?: string;
   dailyVegImageUrl?: string;
+  cookingRatePerMin?: number;
 }

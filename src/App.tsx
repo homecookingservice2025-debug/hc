@@ -95,8 +95,27 @@ export default function App() {
       };
 
       socket.on('newOrderNotification', handleNewOrder);
+      
+      const handleStatusChange = (order: any) => {
+        if (order.userId === user.id || order.chefId === user.id) {
+           let message = `Order update: ${order.status.replace('_', ' ')}`;
+           if (order.status === 'PAYMENT_PENDING' && user.role === UserRole.USER) {
+              message = 'Cooking session ended. Please proceed to payment.';
+           } else if (order.status === 'PAID' && user.role === UserRole.CHEF) {
+              message = 'Payment received! Session completed.';
+           }
+           
+           setNotifications(prev => [{ id: Date.now(), message, data: order }, ...prev]);
+           const audio = new Audio('/notification.mp3');
+           audio.play().catch(() => {});
+        }
+      };
+
+      socket.on('orderStatusChanged', handleStatusChange);
+
       return () => {
         socket.off('newOrderNotification', handleNewOrder);
+        socket.off('orderStatusChanged', handleStatusChange);
       };
     }
   }, [user]);
@@ -137,7 +156,7 @@ export default function App() {
     switch (user.role) {
       case UserRole.ADMIN: return <AdminPanel user={user} config={config} onUpdateConfig={refreshConfig} />;
       case UserRole.MANAGER: return <ManagerPanel user={user} />;
-      case UserRole.CHEF: return <ChefPanel user={user} />;
+      case UserRole.CHEF: return <ChefPanel user={user} config={config} />;
       case UserRole.USER: return <UserPanel user={user} config={config} />;
       default: return <div>Unauthorized</div>;
     }

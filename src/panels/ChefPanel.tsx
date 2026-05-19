@@ -10,12 +10,12 @@ import {
   Bell,
   Wallet
 } from 'lucide-react';
-import { User, Order, OrderStatus } from '../types';
+import { User, Order, OrderStatus, AppConfig } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import socket from '../services/socket';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function ChefPanel({ user }: { user: User }) {
+export default function ChefPanel({ user, config }: { user: User, config: AppConfig | null }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isOnline, setIsOnline] = useState(user.isOnline || false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
@@ -64,9 +64,16 @@ export default function ChefPanel({ user }: { user: User }) {
       }
     });
 
+    socket.on('orderStatusChanged', (order: Order) => {
+      if (order.chefId === user.id) {
+        setActiveOrder(order);
+      }
+    });
+
     return () => {
       socket.off('newOrderNotification');
       socket.off('orderAccepted');
+      socket.off('orderStatusChanged');
     };
   }, [isOnline]);
 
@@ -124,8 +131,9 @@ export default function ChefPanel({ user }: { user: User }) {
   };
 
   const endCooking = () => {
+    const rate = config?.cookingRatePerMin || 3;
     const totalMin = Math.ceil(elapsedTime / 60);
-    const amount = totalMin * 3;
+    const amount = totalMin * rate;
     const commAdmin = Math.round(amount * 0.3);
     const commChef = amount - commAdmin;
 
@@ -133,12 +141,23 @@ export default function ChefPanel({ user }: { user: User }) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        status: OrderStatus.PAID, 
+        status: OrderStatus.PAYMENT_PENDING, 
         endTime: new Date(),
         totalAmount: amount,
         commissionAdmin: commAdmin,
         commissionChef: commChef
       })
+    }).then(res => res.json()).then(updated => {
+      setActiveOrder(updated);
+      // We don't null activeOrder here, we keep it to show the payment status
+    });
+  };
+
+  const collectCash = () => {
+    fetch(`/api/orders/${activeOrder!.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: OrderStatus.PAID })
     }).then(res => res.json()).then(() => {
       setActiveOrder(null);
       setElapsedTime(0);
@@ -219,9 +238,14 @@ export default function ChefPanel({ user }: { user: User }) {
                  </div>
                  <div className="text-right">
                     <div className="text-5xl font-mono text-red-600 tabular-nums font-black">
-                       {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                       {activeOrder.status === OrderStatus.PAYMENT_PENDING 
+                          ? formatCurrency(activeOrder.totalAmount || 0)
+                          : `${Math.floor(elapsedTime / 60)}:${(elapsedTime % 60).toString().padStart(2, '0')}`
+                       }
                     </div>
-                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-2">Rs. 3.00 / minute</p>
+                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-2">
+                       {activeOrder.status === OrderStatus.PAYMENT_PENDING ? 'Total Due' : `Rs. ${config?.cookingRatePerMin || 3}.00 / minute`}
+                    </p>
                  </div>
                </div>
 
@@ -255,7 +279,7 @@ export default function ChefPanel({ user }: { user: User }) {
                 </div>
 
                 <div className="bg-white/5 border border-white/10 p-6 rounded-3xl space-y-4">
-                   <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">Session Control</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">Session Control</h3>
                    {activeOrder.status === OrderStatus.PENDING ? (
                     <div className="space-y-4">
                         <input 
@@ -269,10 +293,23 @@ export default function ChefPanel({ user }: { user: User }) {
                            <Play size={18} fill="currentColor" /> Start Cooking
                         </button>
                      </div>
-                   ) : (
+                   ) : activeOrder.status === OrderStatus.COOKING ? (
                      <button onClick={endCooking} className="w-full h-12 bg-red-500 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-600">
                         <Square size={18} fill="currentColor" /> End & Generate Bill
                      </button>
+                   ) : (
+                     <div className="space-y-3">
+                        <div className="p-4 bg-white/10 rounded-2xl border border-white/5 text-center">
+                           <p className="text-xs text-gray-400 mb-1">Waiting for user payment...</p>
+                           <p className="text-lg font-black text-green-500">Total: {formatCurrency(activeOrder.totalAmount || 0)}</p>
+                        </div>
+                        <button 
+                          onClick={collectCash}
+                          className="w-full h-12 bg-green-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-all active:scale-95"
+                        >
+                           <CheckCircle size={18} /> Collect Cash Payment
+                        </button>
+                     </div>
                    )}
                 </div>
              </div>

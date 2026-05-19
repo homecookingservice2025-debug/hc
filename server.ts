@@ -210,19 +210,26 @@ app.post("/api/phonepe/pay", async (req, res) => {
 app.get("/api/menu", (req, res) => res.json(menu));
 
 async function setupVite(app: any) {
-  // In Vercel, static files are handled by the vercel.json rewrites/builds.
-  // We only need Vite middleware for local development in AI Studio.
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
+  } else if (!process.env.VERCEL && !process.env.NETLIFY) {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
 }
 
-if (process.env.NODE_ENV !== 'production' || (!process.env.VERCEL && !process.env.NETLIFY)) {
-  setupVite(app).then(() => {
+const PORT = Number(process.env.PORT) || 3000;
+
+setupVite(app).then(() => {
+  if (!process.env.VERCEL && !process.env.NETLIFY) {
     const httpServer = createServer(app);
     const io = new Server(httpServer, { cors: { origin: "*" } });
     (global as any).io = io;
@@ -231,11 +238,12 @@ if (process.env.NODE_ENV !== 'production' || (!process.env.VERCEL && !process.en
       socket.on("join", (userId) => socket.join(userId));
     });
 
-    const PORT = Number(process.env.PORT) || 3000;
     httpServer.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
-  });
-}
+  }
+}).catch(err => {
+  console.error("Vite/Server setup error:", err);
+});
 
 export default app;
